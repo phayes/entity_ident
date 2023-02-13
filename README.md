@@ -2,12 +2,12 @@
 Efficient entity identifiers for public APIs
 
 
-Example:
+## Example:
 
  - `user_C3M2XCLwa3LjkkH4V15muQS4lzI`
  - `post_dDsDU9KAREyrb4i64V15mXCLwa3`
 
-Breakdown:
+## Breakdown
 
 ```
 user                _             C3M2XCLwa3LjkkH4V15muQS4lzI
@@ -18,7 +18,7 @@ Entity Identifier   Seperator     Random Bytes
 2. `_` seperator
 3. 128 bits of random bytes. Nominally base62 encoded, but is not encoded or decoded during normal operation. 
 
-Features:
+### Features:
 
 1. URL Safe. Filename Safe.
 2. Easily identifies what type of entity is being referenced.
