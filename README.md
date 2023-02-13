@@ -1,4 +1,4 @@
-# entity_ident
+# EntityIdent
 Efficient entity identifiers for public APIs
 
 
