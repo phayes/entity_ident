@@ -6,8 +6,6 @@ lazy_static! {
     static ref IDENT_REGEX: Regex = Regex::new(r"^([a-zA-Z0-9]{1,8})$").unwrap();
 }
 
-pub struct InvalidIdentifierError;
-
 // Representation:
 // First Byte: Length of the identifier
 
@@ -199,5 +197,81 @@ impl std::str::FromStr for Identifier {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::from_str(s)
+    }
+}
+
+#[derive(Debug)]
+pub struct InvalidIdentifierError;
+
+impl std::fmt::Display for InvalidIdentifierError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid identifier")
+    }
+}
+
+impl std::error::Error for InvalidIdentifierError {
+    fn description(&self) -> &str {
+        "error parsing an id"
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    pub fn test_round_trips() {
+        let id = Identifier::generate("test").unwrap();
+        let id_str = id.as_str();
+        let id2 = Identifier::from_str(id_str).unwrap();
+        assert_eq!(id, id2);
+
+        let id = "user_C3M2XCLwa3LjkkH4V15muQ";
+        let id2 = Identifier::from_str(id).unwrap();
+        assert_eq!(id, id2.as_str());
+
+        let id = "u_C";
+        let id2 = Identifier::from_str(id).unwrap();
+        assert_eq!(id, id2.as_str());
+
+        let id = "useruser_C3M2XCLwa3LjkkH4V15muQ";
+        let id2 = Identifier::from_str(id).unwrap();
+        assert_eq!(id, id2.as_str());
+
+        let id = b"useruser_C3M2XCLwa3LjkkH4V15muQ";
+        let id2 = Identifier::from_bytes(id).unwrap();
+        assert_eq!(id, id2.as_bytes());        
+    }
+
+    #[test]
+    pub fn test_invalid() {
+        let id = "_C3M2XCLwa3LjkkH4V15muQ";
+        assert!(Identifier::from_str(id).is_err());
+
+        let id = "test_";
+        assert!(Identifier::from_str(id).is_err());
+
+        let id = "";
+        assert!(Identifier::from_str(id).is_err());
+
+        let id = "testtestt_C3M2X";
+        assert!(Identifier::from_str(id).is_err());
+
+        let id = "t_C3M2XCLwa3LjkkH4V15muQa";
+        assert!(Identifier::from_str(id).is_err());
+
+        let id = "😊_C3M2XCLwa3LjkkH4V15muQ";
+        assert!(Identifier::from_str(id).is_err());
+    }
+
+    #[test]
+    pub fn test_partial_eq() {
+        let id = "test_C3M2XCLwa3LjkkH4V15muQ";
+        let id2 = Identifier::from_str(id).unwrap();
+
+        assert!(id2.eq(id));
+        assert!(id2.eq(&id.to_string()));
     }
 }
