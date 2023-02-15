@@ -3,7 +3,7 @@ use regex::bytes::Regex;
 
 lazy_static! {
     static ref IDENTIFIER_REGEX: Regex = Regex::new(r"^([a-zA-Z0-9]{1,8})_([a-zA-Z0-9]{1,22})$").unwrap();
-    static ref IDENT_REGEX: Regex = Regex::new(r"^([a-zA-Z0-9]{1,8})$").unwrap();
+    static ref PREFIX_REGEX: Regex = Regex::new(r"^([a-zA-Z0-9]{1,8})$").unwrap();
 }
 
 // Representation:
@@ -17,6 +17,8 @@ pub struct Identifier {
 }
 
 impl Identifier {
+    
+    #[allow(clippy::len_without_is_empty)]
     #[inline]
     pub fn len(&self) -> usize {
         self.bytes[0] as usize
@@ -25,7 +27,7 @@ impl Identifier {
     #[inline]
     pub fn as_str(&self) -> &str {
         // SAFETY: Identifier cannot be constructed from invalid UTF-8
-        unsafe { std::str::from_utf8_unchecked(&self.as_bytes()) }
+        unsafe { std::str::from_utf8_unchecked(self.as_bytes()) }
     }
 
     #[inline]
@@ -51,35 +53,39 @@ impl Identifier {
 
         let mut id_bytes = [0; 32];
         id_bytes[0] = len as u8;
-        id_bytes[1..=len].copy_from_slice(&bytes);
+        id_bytes[1..=len].copy_from_slice(bytes);
         Ok(Self { bytes: id_bytes })
     }
 
+    /// # Safety
+    /// The bytes must be valid ASCII and match the following regex: `^([a-zA-Z0-9]{1,8})_([a-zA-Z0-9]{1,22})$`
     pub unsafe fn from_bytes_unchecked(bytes: &[u8]) -> Self {
         let len = bytes.len();
         debug_assert!(len <= 31);
-        debug_assert!(IDENTIFIER_REGEX.is_match(&bytes));
+        debug_assert!(IDENTIFIER_REGEX.is_match(bytes));
 
         let mut id_bytes = [0; 32];
         id_bytes[0] = len as u8;
-        id_bytes[1..=len].copy_from_slice(&bytes);
+        id_bytes[1..=len].copy_from_slice(bytes);
         Self { bytes: id_bytes }
     }
 
+    /// # Safety
+    /// The string must be valid ASCII and match the following regex: `^([a-zA-Z0-9]{1,8})_([a-zA-Z0-9]{1,22})$`
     pub unsafe fn from_str_unchecked(s: &str) -> Self {
         Self::from_bytes_unchecked(s.as_bytes())
     }
 
-    pub fn ident(&self) -> &str {
+    pub fn prefix(&self) -> &str {
         let bytes = self.as_bytes();
 
         let caps = IDENTIFIER_REGEX.captures(bytes).unwrap();
-        let ident_bytes = caps.get(1).unwrap().as_bytes();
-        unsafe { std::str::from_utf8_unchecked(ident_bytes) }
+        let prefix_bytes = caps.get(1).unwrap().as_bytes();
+        unsafe { std::str::from_utf8_unchecked(prefix_bytes) }
     }
 
-    pub fn generate(ident: &str) -> Result<Self, InvalidIdentifierError> {
-        if !IDENT_REGEX.is_match(ident.as_bytes()) {
+    pub fn generate(prefix: &str) -> Result<Self, InvalidIdentifierError> {
+        if !PREFIX_REGEX.is_match(prefix.as_bytes()) {
             return Err(InvalidIdentifierError);
         }
 
@@ -94,13 +100,13 @@ impl Identifier {
         let mut bytes = [0; 32];
 
         // Zero-index records the size
-        let len = (ident.len() + 1 + encoded_num.len()) as u8;
+        let len = (prefix.len() + 1 + encoded_num.len()) as u8;
         debug_assert!(len <= 31);
         bytes[0] = len;
 
-        bytes[1..=ident.len()].copy_from_slice(ident.as_bytes());
-        bytes[ident.len() + 1] = b'_';
-        bytes[ident.len() + 2..=len as usize].copy_from_slice(encoded_num.as_bytes());
+        bytes[1..=prefix.len()].copy_from_slice(prefix.as_bytes());
+        bytes[prefix.len() + 1] = b'_';
+        bytes[prefix.len() + 2..=len as usize].copy_from_slice(encoded_num.as_bytes());
 
         debug_assert!(IDENTIFIER_REGEX.is_match(&bytes[1..(bytes[0]+1) as usize]));
 
@@ -125,6 +131,12 @@ impl PartialEq<str> for Identifier {
     #[inline]
     fn eq(&self, other: &str) -> bool {
         self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for Identifier {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
     }
 }
 
@@ -176,19 +188,19 @@ impl TryFrom<&[u8]> for Identifier {
     type Error = InvalidIdentifierError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Self::from_bytes(&value)
+        Self::from_bytes(value)
     }
 }
 
-impl Into<String> for Identifier {
-    fn into(self) -> String {
-        self.as_str().to_string()
+impl From<Identifier> for String {
+    fn from(id: Identifier) -> Self {
+        id.as_str().to_string()
     }
 }
 
-impl Into<Vec<u8>> for Identifier {
-    fn into(self) -> Vec<u8> {
-        self.as_bytes().to_vec()
+impl From<Identifier> for Vec<u8> {
+    fn from(id: Identifier) -> Self {
+        id.as_bytes().to_vec()
     }
 }
 
@@ -273,5 +285,7 @@ mod tests {
 
         assert!(id2.eq(id));
         assert!(id2.eq(&id.to_string()));
+        assert!(id2 == id);
+        assert!(id2 == id);
     }
 }

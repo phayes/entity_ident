@@ -1,5 +1,12 @@
-pub mod identifier;
+mod identifier;
 
+#[cfg(test)]
+mod tests;
+
+pub use identifier::Identifier;
+pub use identifier::InvalidIdentifierError;
+
+#[macro_export]
 macro_rules! def_id {
     ($struct_name:ident, $prefix:literal $(| $alt_prefix:literal)* $(, { $generate_hint:tt })?) => {
         /// An id for the corresponding object type.
@@ -7,17 +14,23 @@ macro_rules! def_id {
         /// This type _typically_ will not allocate and
         /// therefore is usually cheaply clonable.
         #[repr(transparent)]
-        #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
-        pub struct $struct_name(Identifier);
+        #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+        pub struct $struct_name($crate::Identifier);
 
         impl $struct_name {
-            /// The prefix of the id type (e.g. `cus_` for a `CustomerId`).
+            /// The prefix of the id (e.g. `cus` for a `CustomerId`).
             #[inline(always)]
-            pub fn prefix() -> &'static str {
-                $prefix
+            pub fn prefix(&self) -> &str {
+                self.0.prefix()
             }
 
-            /// The valid prefixes of the id type (e.g. [`ch_`, `py_`\ for a `ChargeId`).
+            /// The prefix of the id (e.g. `cus` for a `CustomerId`).
+            #[inline(always)]
+            pub fn inner(&self) -> &$crate::Identifier {
+                &self.0
+            }
+
+            /// The valid prefixes of the id type (e.g. [`ch`, `py`\ for a `ChargeId`).
             #[inline(always)]
             pub fn prefixes() -> &'static [&'static str] {
                 &[$prefix$(, $alt_prefix)*]
@@ -32,6 +45,10 @@ macro_rules! def_id {
             /// Check is provided prefix would be a valid prefix for id's of this type
             pub fn is_valid_prefix(prefix: &str) -> bool {
                 prefix == $prefix $( || prefix == $alt_prefix )*
+            }
+
+            pub fn generate() -> Result<Self, $crate::identifier::InvalidIdentifierError> {
+                Ok(Self($crate::Identifier::generate($prefix)?))
             }
         }
 
@@ -81,12 +98,12 @@ macro_rules! def_id {
 
         impl std::fmt::Display for $struct_name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                self.0.fmt(f)
+                std::fmt::Display::fmt(&self.0, f)
             }
         }
 
         impl std::str::FromStr for $struct_name {
-            type Err = ParseIdError;
+            type Err = $crate::ParseIdError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {               
                 if !s.starts_with(concat!($prefix, "_")) $(
@@ -95,14 +112,14 @@ macro_rules! def_id {
                     // N.B. For debugging
                     // eprintln!("bad id is: {} (expected: {:?}) for {}", s, $prefix, stringify!($struct_name));
 
-                    Err(ParseIdError {
+                    Err($crate::ParseIdError {
                         typename: stringify!($struct_name),
                         expected: stringify!(id to start with $prefix $(or $alt_prefix)*),
                     })
                 } else {
                     match s.parse() {
                         Ok(id) => Ok($struct_name(id)),
-                        Err(_) => Err(ParseIdError {
+                        Err(_) => Err($crate::ParseIdError {
                             typename: stringify!($struct_name),
                             expected: stringify!(invalid identifier),
                         }),
@@ -123,6 +140,18 @@ macro_rules! def_id {
                     $( $enum_name::$variant_name(ref id) => id.as_str(), )*
                 }
             }
+
+            pub fn as_bytes(&self) -> &str {
+                match *self {
+                    $( $enum_name::$variant_name(ref id) => id.as_bytes(), )*
+                }
+            }
+
+            pub fn inner(&self) -> &Identifier {
+                match *self {
+                    $( $enum_name::$variant_name(ref id) => id.inner(), )*
+                }
+            }
         }
 
         impl PartialEq<str> for $enum_name {
@@ -154,6 +183,18 @@ macro_rules! def_id {
 
             fn deref(&self) -> &str {
                 self.as_str()
+            }
+        }
+
+        impl PartialOrd for $enum_name {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl Ord for $enum_name {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                self.as_str().cmp(other.as_str())
             }
         }
 
@@ -196,11 +237,16 @@ macro_rules! def_id {
                     $enum_name::$variant_name(id)
                 }
             }
+
+            impl PartialEq<$($variant_type)*> for $enum_name {
+                fn eq(&self, other: &$($variant_type)* ) -> bool {
+                    self.as_str() == other.as_str()
+                }
+            }
         )*
     };
     (enum $enum_name:ident { $( $(#[$test:meta])? $variant_name:ident($($variant_type:tt)*) ),+ $(,)? }) => {
         #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-        #[derive(SmartDefault)]
         pub enum $enum_name {
             $( $(#[$test])* $variant_name($($variant_type)*), )*
         }
@@ -211,6 +257,18 @@ macro_rules! def_id {
                     $( $enum_name::$variant_name(ref id) => id.as_str(), )*
                 }
             }
+
+            pub fn as_bytes(&self) -> &[u8] {
+                match *self {
+                    $( $enum_name::$variant_name(ref id) => id.as_bytes(), )*
+                }
+            }
+
+            pub fn inner(&self) -> &Identifier {
+                match *self {
+                    $( $enum_name::$variant_name(ref id) => id.inner(), )*
+                }
+            }
         }
 
         impl PartialEq<str> for $enum_name {
@@ -248,18 +306,18 @@ macro_rules! def_id {
         impl std::fmt::Display for $enum_name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match *self {
-                    $( $enum_name::$variant_name(ref id) => id.fmt(f), )*
+                    $( $enum_name::$variant_name(ref id) => std::fmt::Display::fmt(&id, f), )*
                 }
             }
         }
 
         impl std::str::FromStr for $enum_name {
-            type Err = ParseIdError;
+            type Err = $crate::ParseIdError;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let prefix = s.find('_')
                     .map(|i| &s[0..=i])
-                    .ok_or_else(|| ParseIdError {
+                    .ok_or_else(|| $crate::ParseIdError {
                         typename: stringify!($enum_name),
                         expected: "id to start with a prefix (as in 'prefix_')"
                     })?;
@@ -269,7 +327,7 @@ macro_rules! def_id {
                         Ok($enum_name::$variant_name(s.parse()?))
                     })*
                     _ => {
-                        Err(ParseIdError {
+                        Err($crate::ParseIdError {
                             typename: stringify!($enum_name),
                             expected: "unknown id prefix",
                         })
@@ -282,6 +340,12 @@ macro_rules! def_id {
             impl From<$($variant_type)*> for $enum_name {
                 fn from(id: $($variant_type)*) -> Self {
                     $enum_name::$variant_name(id)
+                }
+            }
+
+            impl PartialEq<$($variant_type)*> for $enum_name {
+                fn eq(&self, other: &$($variant_type)* ) -> bool {
+                    self.as_str() == other.as_str()
                 }
             }
         )*

@@ -9,5 +9,5 @@ edition = "2021"
 serde = { version = "1", features = ["derive"] }
 getrandom = { version = "0.2" }
 base62 = "2"
-regex = { version = "1", features = ["std", "perf", "perf-dfa", "perf-inline", "perf-literal", "perf-cache"] }
+regex = { version = "1", default-features = false, features = ["std", "perf"] }
 lazy_static = "1"
