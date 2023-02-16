@@ -19,6 +19,7 @@ macro_rules! def_id {
 
         impl $struct_name {
             /// The prefix of the id (e.g. `cus` for a `CustomerId`).
+            #[allow(dead_code)]
             #[inline(always)]
             pub fn prefix(&self) -> &str {
                 self.0.prefix()
@@ -38,30 +39,36 @@ macro_rules! def_id {
             }
 
             /// The valid prefixes of the id type (e.g. [`ch`, `py`\ for a `ChargeId`).
+            #[allow(dead_code)]
             #[inline(always)]
             pub fn prefixes() -> &'static [&'static str] {
                 &[$prefix$(, $alt_prefix)*]
             }
 
             /// Extracts a string slice containing the entire id.
+            #[allow(dead_code)]
             #[inline(always)]
             pub fn as_str(&self) -> &str {
                 self.0.as_str()
             }
 
             /// Check is provided prefix would be a valid prefix for id's of this type
+            #[allow(dead_code)]
             pub fn is_valid_prefix(prefix: &str) -> bool {
                 prefix == $prefix $( || prefix == $alt_prefix )*
             }
 
+            #[allow(dead_code)]
             pub fn is_valid_prefix_bytes(prefix: &[u8]) -> bool {
                 prefix == $prefix.as_bytes() $( || prefix == $alt_prefix.as_bytes() )*
             }
 
+            #[allow(dead_code)]
             pub fn generate() -> Result<Self, $crate::identifier::InvalidIdentifierError> {
                 Ok(Self($crate::Identifier::generate($prefix)?))
             }
 
+            #[allow(dead_code)]
             pub fn from_bytes(bytes: &[u8]) -> Result<Self, $crate::identifier::InvalidIdentifierError> {
                 let prefix = bytes.split(|&b| b == b'_').next().ok_or($crate::identifier::InvalidIdentifierError)?;
 
@@ -145,6 +152,12 @@ macro_rules! def_id {
             }
         }
 
+        impl Into<String> for $struct_name {
+            fn into(self) -> String {
+                self.0.into()
+            }
+        }
+
         def_id_serde_impls!($struct_name);
     };
     (enum $enum_name:ident { $( $(#[$test:meta])? $variant_name:ident($($variant_type:tt)*) ),+ $(,)? }) => {
@@ -154,6 +167,7 @@ macro_rules! def_id {
         }
 
         impl $enum_name {
+            #[allow(dead_code)]
             pub fn as_str(&self) -> &str {
                 match *self {
                     $( $enum_name::$variant_name(ref id) => id.as_str(), )*
@@ -174,6 +188,7 @@ macro_rules! def_id {
                 }
             }
 
+            #[allow(dead_code)]
             pub fn from_bytes(bytes: &[u8]) -> Result<Self, $crate::identifier::InvalidIdentifierError> {
                 let prefix = bytes.split(|&b| b == b'_').next().ok_or($crate::identifier::InvalidIdentifierError)?;
 
@@ -251,6 +266,14 @@ macro_rules! def_id {
                             expected: "unknown id prefix",
                         })
                     }
+                }
+            }
+        }
+
+        impl Into<String> for $enum_name {
+            fn into(self) -> String {
+                match self {
+                    $( $enum_name::$variant_name(id) => id.into(), )*
                 }
             }
         }
