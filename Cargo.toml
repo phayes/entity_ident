@@ -11,3 +11,7 @@ getrandom = { version = "0.2" }
 base62 = "2"
 regex = { version = "1", default-features = false, features = ["std", "perf"] }
 lazy_static = "1"
+
+[features]
+default = ["serde"]
+serde = ["serde/derive"]
