@@ -24,6 +24,12 @@ macro_rules! def_id {
                 self.0.prefix()
             }
 
+            #[allow(dead_code)]
+            #[inline(always)]
+            pub fn default_prefix() -> &'static str {
+                $prefix
+            }
+
             /// The prefix of the id (e.g. `cus` for a `CustomerId`).
             #[allow(dead_code)]
             #[inline(always)]
@@ -48,8 +54,21 @@ macro_rules! def_id {
                 prefix == $prefix $( || prefix == $alt_prefix )*
             }
 
+            pub fn is_valid_prefix_bytes(prefix: &[u8]) -> bool {
+                prefix == $prefix.as_bytes() $( || prefix == $alt_prefix.as_bytes() )*
+            }
+
             pub fn generate() -> Result<Self, $crate::identifier::InvalidIdentifierError> {
                 Ok(Self($crate::Identifier::generate($prefix)?))
+            }
+
+            pub fn from_bytes(bytes: &[u8]) -> Result<Self, $crate::identifier::InvalidIdentifierError> {
+                let prefix = bytes.split(|&b| b == b'_').next().ok_or($crate::identifier::InvalidIdentifierError)?;
+
+                if !Self::is_valid_prefix_bytes(prefix) {
+                    return Err($crate::identifier::InvalidIdentifierError);
+                }
+                Ok(Self($crate::Identifier::from_bytes(bytes)?))
             }
         }
 
@@ -110,9 +129,6 @@ macro_rules! def_id {
                 if !s.starts_with(concat!($prefix, "_")) $(
                     && !s.starts_with(concat!($alt_prefix, "_"))
                 )* {
-                    // N.B. For debugging
-                    // eprintln!("bad id is: {} (expected: {:?}) for {}", s, $prefix, stringify!($struct_name));
-
                     Err($crate::ParseIdError {
                         typename: stringify!($struct_name),
                         expected: stringify!(id to start with $prefix $(or $alt_prefix)*),
@@ -156,6 +172,21 @@ macro_rules! def_id {
                 match *self {
                     $( $enum_name::$variant_name(ref id) => id.inner(), )*
                 }
+            }
+
+            pub fn from_bytes(bytes: &[u8]) -> Result<Self, $crate::identifier::InvalidIdentifierError> {
+                let prefix = bytes.split(|&b| b == b'_').next().ok_or($crate::identifier::InvalidIdentifierError)?;
+
+                // Check each variant to see if this is a valid prefix for that variant, by using the variant type
+                // to check the prefix.
+                $(
+                    if <$($variant_type)*>::is_valid_prefix_bytes(prefix) {
+                        return Ok($enum_name::$variant_name(<$($variant_type)*>::from_bytes(bytes)?));
+                    }
+                )*
+
+                Err($crate::identifier::InvalidIdentifierError)
+
             }
         }
 
@@ -251,7 +282,11 @@ macro_rules! def_id_serde_impls {
             where
                 S: serde::ser::Serializer,
             {
-                self.as_str().serialize(serializer)
+                if serializer.is_human_readable() {
+                    serializer.serialize_str(self.as_str())
+                } else {
+                    serializer.serialize_bytes(self.as_bytes())
+                }
             }
         }
 
@@ -260,8 +295,13 @@ macro_rules! def_id_serde_impls {
             where
                 D: serde::de::Deserializer<'de>,
             {
-                let s: String = serde::Deserialize::deserialize(deserializer)?;
-                s.parse::<Self>().map_err(::serde::de::Error::custom)
+                if deserializer.is_human_readable() {
+                    let s: String = serde::Deserialize::deserialize(deserializer)?;
+                    s.parse::<Self>().map_err(::serde::de::Error::custom)
+                } else {
+                    let b: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+                    Self::from_bytes(b).map_err(::serde::de::Error::custom)
+                }
             }
         }
     };
