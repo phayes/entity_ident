@@ -129,7 +129,6 @@ macro_rules! def_id {
             }
         }
 
-        // Injected via build.rs for serde support
         def_id_serde_impls!($struct_name);
     };
     (enum $enum_name:ident { $( $(#[$test:meta])? $variant_name:ident($($variant_type:tt)*) ),+ $(,)? }) => {
@@ -239,12 +238,9 @@ macro_rules! def_id {
             }
         )*
 
-        // Injected via build.rs for serde support
         def_id_serde_impls!($enum_name);
     };
 }
-
-//include!(concat!(env!("OUT_DIR"), "/serde_impl.rs"));
 
 #[cfg(feature = "serde")]
 #[macro_export]
@@ -269,7 +265,6 @@ macro_rules! def_id_serde_impls {
             }
         }
     };
-    ($struct_name:ident, _) => {};
 }
 
 #[cfg(not(feature = "serde"))]
@@ -277,7 +272,6 @@ macro_rules! def_id_serde_impls {
 #[macro_export]
 macro_rules! def_id_serde_impls {
     ($struct_name:ident) => {};
-    ($struct_name:ident, _) => {};
 }
 
 
